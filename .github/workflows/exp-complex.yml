@@ -1,0 +1,71 @@
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
+name: SPI Fly - CI Build
+
+on:
+  push:
+
+    # Sequence of patterns matched against refs/heads
+    branches-ignore:
+      # Push events to branches matching refs/heads/dependabot/**
+      - 'dependabot/**'
+  pull_request:
+
+defaults:
+  run:
+    working-directory: spi-fly
+
+env:
+  LC_ALL: en_US.UTF-8
+
+jobs:
+  JDKxx_Matrix:
+    strategy:
+      matrix:
+        java: [ 8, 11, 17, 18, 19-ea ]
+        os: [ ubuntu-latest ]
+        include:
+          - os: windows-latest
+            java: 17
+    name: JDK${{ matrix.java }} ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'zulu'
+          check-latest: ${{ endsWith(matrix.java, '-ea') }}
+          java-version: ${{ matrix.java }}
+      - name: Initialize Energy Estimation
+        uses: green-coding-berlin/eco-ci-energy-estimation@4eec5ab2253f0f13ce9dae785c06d9f8c88e6d44 # use hash or @vX here (See note below)
+        with:
+          task: start-measurement
+      - name: Build
+        continue-on-error: ${{contains(matrix.java, '-ea')}}
+        shell: bash
+        run: |
+          mvn -U -e -B -ntp install
+      - name: Build measurement
+        if: always()
+        uses: green-coding-berlin/eco-ci-energy-estimation@4eec5ab2253f0f13ce9dae785c06d9f8c88e6d44 # use hash or @vX here (See note below)
+        with:
+          task: get-measurement
+          label: 'Build measurement'
+      - name: Show Energy Results
+        if: always()
+        uses: green-coding-berlin/eco-ci-energy-estimation@4eec5ab2253f0f13ce9dae785c06d9f8c88e6d44 # use hash or @vX here (See note below)
+        id: total-measurement-step
+        with:
+          task: display-results
